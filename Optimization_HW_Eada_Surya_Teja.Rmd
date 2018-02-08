@@ -1,0 +1,486 @@
+---
+title: "Inferences on Optimization Techniques"
+author: 
+- Surya Teja Eada^[<surya.eada@uconn.edu>; M.S. in Applied Financial Mathematics,
+  Department of Mathematics, University of Connecticut.]
+date: "02/08/2018"
+documentclass: article
+papersize: letter
+fontsize: 12pt
+bibliography: template.bib
+biblio-style: datalab
+keywords: Template, R Markdown, bookdown, Data Lab
+output:
+  bookdown::html_document2
+
+abstract: |
+  This project intends to utilize various optimization techniques applicable to continuous spaces such as Newton-Raphson, Fisher's Scoring, Fixed point method in trying to maximize likelihood of different distribution functions. The project also intends to make some comments on speed, stability of these techniques. 
+---
+
+
+
+```{r setup, echo = FALSE, message = FALSE, warning = FALSE}
+## some utility functions, see the source code for details
+source("utils_template.R")
+
+## specify the packages needed
+pkgs <- c("splines2", "DT", "webshot", "leaflet", "graphics", "elliptic")
+need.packages(pkgs)
+
+## get output format in case something needs extra effort
+outFormat <- knitr::opts_knit$get("rmarkdown.pandoc.to")
+## "latex" or "html"
+
+## for latex and html output
+isHtml <- identical(outFormat, "html")
+isLatex <- identical(outFormat, "latex")
+latex <- ifelse(isLatex, '\\LaTeX\\', 'LaTeX')
+
+## specify global chunk options
+knitr::opts_chunk$set(fig.width = 5, fig.height = 4, dpi = 300,
+                      out.width = "90%", fig.align = "center")
+
+```
+
+
+# Cauchy Distribution MLE Optimization {#sec:Q1}
+
+In this question, we try to maximize the likelihood of the $Cauchy(\theta,1)$ with the given sample observations using various optimization techniques. The probability density function of $Cauchy(\theta,1)$ is given in \@ref(eq:cauchy).
+
+\begin{align}
+    p(x;\theta) = \frac{1}{\pi(1 + (x - \theta)^2)}
+    (\#eq:cauchy)
+\end{align}
+
+Let $X_1, X_2, ..., X_n$ be $i.i.d$ samples from  $Cauchy(\theta,1)$. Let $L(\theta)$ and $l(\theta)$ represent the likehilhood and log likelihood functions of $\theta$ based on the sample from Cauchy distribution, then we obtain $l(\theta)$ as given in \@ref(eq:likelicauchy), $l'(\theta)$ as given in \@ref(eq:likelidiffcauchy), $l''(\theta)$ as given in \@ref(eq:likeli2diffcauchy), and fisher's information $I(\theta)$ as given in \@ref(eq:fishercauchy).
+
+## Mathematical Background - Cauchy Likelihood and Score functions 
+
+Since $X_1, X_2, ..., X_n$ are $i.i.d$, 
+
+\begin{align}
+    p(x;\theta) &= \frac{1}{\pi(1 + (x - \theta)^2)} \\ \\
+    L(\theta)   &= p(x_1;\theta).p(x_2;\theta)....p(x_n;\theta) \\ \\
+                &= \prod_{i = 1}^{n} \frac{1}{\pi(1 + (x_i - \theta)^2)} \\ \\
+                &= \frac{1}{\pi^n}. \prod_{i = 1}^{n} (1 + (x_i - \theta)^2)^{-1} \\ \\
+    l(\theta)   &= log(L(\theta)) \\ \\
+    l(\theta)   &= -n.log\pi - \sum_{i=1}^{n}log(1 + (x_i - \theta)^2)                     (\#eq:likelicauchy)  \\ \\ 
+\end{align}
+
+Now when we differentiate the above formula for likelihood function of the cauchy distribution, we obtain the differential of the likelihood function or in other words the score function. In order to maximize likelihood, we need to obtain the solutions for the score function equaling zero which is sometimes complicated. Similarly, differentiating the score function $l'(\theta)$, we obtain the second differential of the likelihood function.
+
+\begin{align}
+    l'(\theta) &= 0 - \sum_{i=1}^{n} \frac{1}{1 + (x_i - \theta)^2}.2 (x_i - \theta) (-1) \\
+               &= -2 \sum_{i=1}^{n} \frac{\theta - x_i}{1 + (x_i - \theta)^2} (\#eq:likelidiffcauchy) \\ \\
+\end{align}
+
+\begin{align}
+    l''(\theta) &=  -2 \sum_{i=1}^{n} \frac{(1 + (\theta - x_i)^2 - 2 (\theta - x_i)^2}{(1 + (x_i - \theta)^2)^2}. \\
+               &= -2 \sum_{i=1}^{n} \frac{1- (\theta - x_i)^2}{(1 + (x_i - \theta)^2)^2} (\#eq:likeli2diffcauchy) \\ \\
+\end{align}
+
+Fisher's information is the variance of the score function. It is a measure of information about $\theta$ carried out by sample of observations. 
+
+Using the second differential formula, since $X_i's$ are $i.i.d$ and similarly $-2\frac{1- (\theta - x_i)^2}{(1 + (x_i - \theta)^2)^2}$ are $i.i.d$, $I(\theta; X_1,...X_n)$ is equal to $n.I(\theta; X)$, where X is a single observation from cauchy distribution 
+
+\begin{align}
+  I(\theta) &=  E((l'(\theta))^2) or \\ \\
+  I(\theta) &=  E(-l''(\theta)) \\ \\
+    
+  I(\theta) &= n.I(\theta|X) \\ \\
+            &= n.E\Big(\Big(\frac{d}{d\theta}log(p(x;\theta))\Big)^2 \Big) \\ \\
+              &= n.E\Big(\Big(\frac{1}{p(x;\theta)}.p'(x;\theta)\Big)^2\Big) \\ \\ 
+              &= n.\int \Big(\frac{p'(x;\theta)}{p(x;\theta)}\Big)^2.p(x;\theta) \!dx \\ \\
+              &= n.\int \frac{(p'(x;\theta))^2}{p(x;\theta)} dx \\ \\
+  I(\theta)   &= \frac{4n}{\pi} \int_{-\infty}^{\infty} \frac{(\theta - x)^2}{(1 + (\theta - x)^2)^3} dx \\ \\
+\end{align}
+  
+By making the following substitution, it simplifies further and the limits of integration stays the same.  
+
+\begin{align}
+  x - \theta &= w  \\
+  dx         &= dw \\
+\end{align}
+
+
+Now, 
+\begin{align}
+  I(\theta) &= \frac{4n}{\pi} \int_{-\infty}^{\infty} (\frac{(w)^2}{(1 + (w)^2)^3}) dw \\ \\ 
+\end{align} 
+  
+Making the following trigonomtric substitution simplifies further and the limits of integration for $\phi$ are $\frac{-\pi}{2}$ and $\frac{\pi}{2}$.
+
+\begin{align}
+          w &= tan(\phi) \\
+         dw &= sec^2(\phi) d\phi \\
+    1 + w^2 &= sec^2(\phi) \\
+\end{align}
+
+Now, 
+\begin{align}    
+ I(\theta) &= \frac{4n}{\pi} \Big[\int_{-\frac{\pi}{2}}^{\frac{\pi}{2}} (\frac{tan^2(\phi)}{sec^6(\phi)}) sec^2(\phi) d\phi \Big] \\ \\ 
+ I(\theta) &= \frac{4n}{\pi} \Big[\int_{-\frac{\pi}{2}}^{\frac{\pi}{2}} (sin^2(\phi) cos^2(\phi)) d\phi \Big] \\ \\
+ I(\theta) &= \frac{4n}{\pi} \Big[\int_{-\frac{\pi}{2}}^{\frac{\pi}{2}} \frac {sin^2(2\phi)}{4} d\phi \Big] \\ \\ 
+ I(\theta) &= \frac{n}{\pi} \Big[\int_{-\frac{\pi}{2}}^{\frac{\pi}{2}} \frac {1 - cos(4\phi)}{2} d\phi \Big] \\ \\ 
+ I(\theta) &= \frac{n}{\pi} \Big[\frac{\phi}{2} - \frac{sin(4\phi)}{8} \Big|_{-\frac{\pi}{2}}^{\frac{\pi}{2}} \Big] \\ \\
+ I(\theta) &= \frac{n}{\pi} \Big[\Big( \frac{\frac{\pi}{2}}{2} - \frac{sin(4(\frac{\pi}{2})}{8} \Big) - \Big( \frac{\frac{-\pi}{2}}{2} - \frac{sin(4(\frac{-\pi}{2})}{8} \Big) \Big]  \\ \\
+ I(\theta) &= \frac{n}{\pi} \Big[\Big( \frac{\pi}{4} - 0 \Big) - \Big( \frac{-\pi}{4} - 0 \Big) \Big]  \\ \\
+ I(\theta) &= \frac{n}{\pi}. \frac{\pi}{2}   \\ \\  
+ I(\theta) &= \frac{n}{2}  (\#eq:fishercauchy) \\ \\
+\end{align}
+
+Once the above mathematical background was set up via. the above formulas and once the observations in 'sample' were given, the log-likelihood curve is plotted. The log-likelihood curve is plotted in Figure \@ref(fig:cauchylikelifig) 
+
+(ref:cap-cauchylikelifig) Log-Likelihood function of Cauchy Distribution with given data 'sample'
+
+```{r cauchylikelifig, echo = TRUE, fig.cap = "(ref:cap-cauchylikelifig)", fig.width = 8}
+# "x" in the function refers to the theta parameter.
+log_likelihood <- function(x) {
+  sample <- c(1.77, -0.23, 2.76, 3.80, 3.47, 56.75, -1.34, 4.24, -2.44,
+              3.29, 3.71, -2.40, 4.53, -0.07, -1.05, -13.87, -2.53, -1.75)  
+  log_likelihood <- -length(sample)*log(pi)
+  for (y in sample) { 
+    log_likelihood <- log_likelihood - log(1 + (y - x)^2)
+  }
+  return(log_likelihood)
+}
+
+## Plot the log_likelihood function as a function of theta
+curve(log_likelihood, -20, 20, n = 1000, xlab = "theta", ylab = "log_likelihood(theta)")
+```
+
+## Application of Newton Raphson to find MLE of Cauchy Distribution 
+
+Newton Raphson is widely regarded technique for optimization of various complicated functions. When the score function (or the differential of the log-likelihood function) does not have an easy solution, Newton Raphson evaluates to find the maximum. Sometimes, the algorithm however converges at a local maximum. From Figure \@ref(fig:cauchylikelifig), it is observed that there are two local maximums for the log-likelihood function. Once Newton Raphson was applied and the results were obtained, a table was generated to show convergence to each of the local maximums and the number of iterations in which it converged.
+
+(ref:cap-Newton) Application of Newton Raphson to find MLE of Cauchy Distribution
+
+```{r Newton, echo = TRUE, message = FALSE, warning = FALSE}
+source("Likelihood_Functions_Q1.R")
+knitr::kable(table_of_newton_roots, booktabs = TRUE,
+             caption = "(ref:cap-Newton)" )
+```
+
+The newton raphson algorithm has started at different initial points to converge to different maximum likelihood estimates. There are two local maximums for likelihood of theta, one at "3.021345"", and the other at "-0.5914735". The farther, one starts from the local maximum, the more number of iterations it takes to reach the convergence. For example, initial point 38 takes 862 iterations before convergence.
+
+```{r sample_mean, echo = TRUE, message = FALSE, warning = FALSE}
+sample <- c(1.77, -0.23, 2.76, 3.80, 3.47, 56.75, -1.34, 4.24, -2.44,
+              3.29, 3.71, -2.40, 4.53, -0.07, -1.05, -13.87, -2.53, -1.75) 
+newton <- newton_raphson(mean(sample), score, observed_information, maxiter = 1000)
+newton
+```
+
+If the algorithm starts with the mean value of the sample, then due to the proximity of local maxima to the mean in this example, it only takes 97 iterations before convergence to 3.021345 (nearest local maximum). Therefore, the mean value of sample can be considered to be a good initial point for Newton Raphson application for maximizing likelihood.
+
+## Fixed Point Iteration application to MLE in Cauchy Distribution
+
+After Newton Raphson is tried, the fixed point iteration method is also utilized in order to find the MLE of $\theta$. There are three scale values in (1, 0.64, 0.25)
+
+```{r fixedpoint, echo = TRUE, message = FALSE, warning = FALSE}
+source("Likelihood_Functions_Q1.R")
+theta_fixed(-1, alpha = 1, tol = 1E-6, max.iter = 1000)
+theta_fixed(-1, alpha = 0.64, tol = 1E-6, max.iter = 1000)
+theta_fixed(-1, alpha = 0.25, tol = 1E-6, max.iter = 1000)
+```
+
+As observed above, when the fixed point iteration algorithm was applied, there was a lot of emphasis over the choice of alpha. With alpha such as 1, the algorithm failed to converge even in 1000 iterations from an initial point of -1, whereas with a little lower alpha of 0.64, algorithm converged in 11 iterations to its nearest local maximum (-0.591474). But it could be noted that lowering the alpha further to 0.25 has again increased the number of iterations to 20. This suggests that the fixed point algorithm might not always converge. This also shows that the success of fixed point algorithm lies in the appropriate choice of scale parameter, alpha which should not be very low or very high.
+
+Furthermore, the experiment is repeated with all the other starting points considered earlier for Newton Raphson, and the convergence and iterations are tabulated in \@ref(tab:fixedpointtable).
+
+(ref:cap-fixedpointtable) Application of Fixed point iterations to Cauchy MLE evaluation
+
+```{r fixedpointtable, echo = TRUE, message = FALSE, warning = FALSE}
+source("Likelihood_Functions_Q1.R")
+knitr::kable(table_of_fixed_points, booktabs = TRUE,
+             caption = "(ref:cap-fixedpointtable)" )
+```
+
+
+## Fisher Scoring
+
+We can also use the fisher information instead of the actual information and minimize and then use newton raphson to improve the estimate. This method will improve efficiency as the number of iterations and time taken decreases due to not using the actual information and instead using the fisher's information.
+
+(ref:cap-fisher) Application of Fisher & Newton for Cauchy MLE evaluation
+
+```{r fisher, echo = TRUE, message = FALSE, warning = FALSE}
+source("Likelihood_Functions_Q1.R")
+knitr::kable(table_fisher, booktabs = TRUE,
+             caption = "(ref:cap-fisher)" )
+```
+
+It could be clearly observed from the number of iterations taken, that it is better than Newton Raphson Algorithm by itself. Especially for the initial points that are far from the final convergence estimate, Fisher and Newton took significantly lesser number of iterations and converged to the same limit.
+
+## Comparison of Methods
+
+In this project, a combination of techniques were applied to find the MLE estimator of Cauchy. Newton Raphson, Fixed point Iteration, Fisher & Newton are all applied. Fixed point iteration is very unreliable or unstable. It depends very heavily upon the choice of alpha and most often does not converge at all. While Newton_Raphson and Fisher & Newton both converged reasonably, the number of iterations it took for Fisher & Newton for starting points such as -11 and 38 is way lesser in comparison to the Newton_Raphson method. Therefore, for speed Fisher and Newton method is better than all the other methods.
+
+\nextpage
+
+# Optimization MLE for a different probability denstiy function {#sec:Q2}
+
+This time we are working with probability density function defined only on $(0,2\pi)$. The density function is defined as in \@ref(eq:density2)
+
+\begin{align}
+    p(x; \theta) = \frac{1 - cos(x - \theta)}{2\pi}, 0  \le x \le 2\pi, -\pi \le \theta \le \pi 
+    (\#eq:density2)
+\end{align}
+
+The log-likelihood function for $\theta$ can be determined on the basis of the observed sample as given in \@ref(eq:likeli2)
+
+\begin{align}
+   L(\theta)   &= p(x_1;\theta).p(x_2;\theta)....p(x_n;\theta) \\ \\
+   L(\theta)   &= \prod_{i=1}^{n} \frac{1 - cos(x_i - \theta)}{2\pi} \\ \\
+   L(\theta)   &= \frac{1}{(2\pi)^n}\prod_{i=1}^{n} 1 - cos(x_i - \theta) \\ \\
+   l(\theta)   &= log(L(\theta)) \\ \\
+   l(\theta)   &= - n log(2\pi)  + \sum_{i=1}^{n} log(1 - cos(x_i - \theta)), -\pi \le \theta \le \pi
+   (\#eq:likeli2) \\ \\
+\end{align}
+
+(ref:cap-likelifig2) Log-Likelihood function of theta of given distribution with given data 'sample'
+
+```{r likelifig2, echo = TRUE, fig.cap = "(ref:cap-likelifig2)", fig.width = 8}
+# argument x refers to theta. It is named so for ease of using the curve function.
+sample2 <- c(3.91, 4.85, 2.28, 4.06, 3.70, 4.04, 5.46, 3.53, 2.28, 1.96,
+             2.53, 3.88, 2.22, 3.47, 4.82, 2.46, 2.99, 2.54, 0.52)
+
+log_likelihood2 <- function(x){
+  log_likelihood2 <- NA
+  if (-pi <= x && x <= pi) {
+    log_likelihood2 <- -length(sample2)*log(2*pi)
+    for (y in sample2) {
+      log_likelihood2 <- log_likelihood2 + log(1 - cos(y - x))
+    }
+  }
+  return(log_likelihood2)
+}
+
+## Plot the log_likelihood function as a function of theta
+curve(log_likelihood2, -pi, pi, n = 1000, xlab = "theta", ylab = "log_likelihood(theta)")
+```
+   
+   
+## Method of Moments Estimator
+
+In order to find the method of moments estimator, one needs to find the expectation with the given density function. $\theta_{moment}$ is the method of moments estimator if \@ref(eq:moment) is satisfied. The method of moments estimator is given in \@ref(eq:thetamoment)
+
+\begin{align}
+E(X|\theta_{moment}) &= \bar{x}
+  (\#eq:moment) \\ \\
+\end{align} 
+   
+Solving for the expectation,
+
+\begin{align}
+E(X|\theta) &= \int_{0}^{2\pi} x. \Big( \frac{1 - cos(x - \theta)}{2\pi} \Big) dx \\ \\ 
+E(X|\theta) &= \frac{1}{2\pi}.\int_{0}^{2\pi} x dx  -  \frac{1}{2\pi}.\int_{0}^{2\pi} x.cos(x-\theta).dx \\ \\
+E(X|\theta) &= \frac{1}{2\pi}.\Big( \frac{x^2}{2} \Big|_{0}^{2\pi} \Big) - 
+                \frac{1}{2\pi}.\Big[ x.sin(x - \theta) \Big|_{0}^{2\pi} - \int_{0}^{2\pi} sin(x - \theta) dx \Big] \\ \\
+E(X|\theta) &= \frac{1}{2\pi}.\frac{4\pi^2}{2} - \frac{1}{2\pi}.\Big[ 2\pi.sin(2\pi - \theta) + cos(2\pi - \theta) -                           cos(-\theta) \Big] \\ \\ 
+E(X|\theta) &= \pi + sin(\theta) \\ \\ 
+\end{align} 
+
+Equating the above expression to the sample mean gives the method of moment estimator. There are two method of moment estimator values within the domain of $\theta$.  
+
+\begin{align}
+E(X|\theta_{moment})       &= \pi + sin(\theta_{moment}) \\ \\
+\pi + sin(\theta_{moment}) &= \bar{x} \\ \\
+sin(\theta_{moment})       &= \bar{x} - \pi \\ \\
+\theta_{moment}            &= arcsin(\bar{x} - \pi)
+    (\#eq:thetamoment) \\ \\ 
+\end{align} 
+
+## Maximum likelihood Estimation of the distribution parameter $\theta$
+
+We find the maximum likelihood estimator of the distribution parameter $\theta$ utilizing the newton raphson method to find the solution of the score function. As an initial point, we use the method of moments estimator of $\theta$. There are two method of moment solutions for the equation, one at 0.09539407 ($\theta_{moment1}$) and the other at 3.046199 ($\pi - \theta_{moment1}$) within the domain of $\theta$. In order to do so, "Score2" and "Observed Information", the respective functions are also deduced as given in \@ref(eq:score2) and \@ref(eq:observedinf2)
+
+\begin{align}
+  l'(\theta) &= \sum_{i = 1}^{n} \frac{sin(\theta - x_i)}{(1 - cos(x_i - \theta))}
+  (\#eq:score2) \\ \\ 
+  l''(\theta) &= - \sum_{i = 1}^{n} \frac{1}{1 - cos(x_i - \theta)}
+  (\#eq:observedinf2)
+\end{align}
+
+
+```{r Newton2, echo = TRUE, message = FALSE, warning = FALSE}
+sample2 <- c(3.91, 4.85, 2.28, 4.06, 3.70, 4.04, 5.46, 3.53, 2.28, 1.96,
+             2.53, 3.88, 2.22, 3.47, 4.82, 2.46, 2.99, 2.54, 0.52)
+moment_estimate1 <- asin(mean(sample2) - pi)
+moment_estimate2 <- pi - asin(mean(sample2) - pi)
+source("Likelihood_Functions_2.R")
+newton2_1 <- newton_raphson(moment_estimate1, score2, observed_information2, maxiter = 1000)
+newton2_2 <- newton_raphson(moment_estimate2, score2, observed_information2, maxiter = 1000)
+newton2_1
+newton2_2
+```
+
+Using the two values of method of moments gives two local maximum likelihood estimates and they are 0.003118157 and 3.170715 respectively. Also, it only took 5 and 7 iterations respectively and therefore is a good initial point. But one needs to consider the likelihood function has many local maximums and therefore it is reasonable to converge to one of the local maximums in as less number of iterations.
+
+## Newton Raphson algorithm starting with initial points of $\theta$ = 2.7 and $\theta$ = -2.7
+
+The newton raphson algorithm was tried with initial points taken from close to the boundaries of the domain of $\theta$, taking values -2.7 and 2.7.
+
+```{r Newton21, echo = TRUE, message = FALSE, warning = FALSE}
+sample2 <- c(3.91, 4.85, 2.28, 4.06, 3.70, 4.04, 5.46, 3.53, 2.28, 1.96,
+             2.53, 3.88, 2.22, 3.47, 4.82, 2.46, 2.99, 2.54, 0.52)
+source("Likelihood_Functions_2.R")
+newton2_3 <- newton_raphson(-2.7, score2, observed_information2, maxiter = 1000)
+newton2_4 <- newton_raphson( 2.7, score2, observed_information2, maxiter = 1000)
+newton2_3
+newton2_4
+```
+
+As there are more than a few local maximums, it is observed that, the algorithm converged to -2.668857 when started from -2.7 in around 5 iterations and converged to 2.848415 when started from 2.7 in around 6 iterations. It is reasonable that there are two new estimate values as we knew that the likelihood function has many local maximums. Therefore, the starting point is very important for this function in order to obtain the global maximum likelihood.
+
+## Clustering different initial points and different maximum outcomes
+
+Since this distribution has many maximums, we tried 200 different initial points and observed that there are 18 possible outcomes, one of the outcomes being "No Convergence". We split the initial points based on the 18 outcomes and observed that they are from within ranges. The table illustrates the 18 possible outcomes which maximizes the likelihood and the minimum and the maximum values of initial points which return these outcomes. For the exact 200 values, one can run the source code file that forms groups 1 to groups 18.
+
+(ref:cap-cluster) Clustering of initial points based on 18 different outcomes
+
+```{r cluster, echo = TRUE, message = FALSE, warning = FALSE}
+source("Clustering_Outcomes_Initial_Points_Q2.R")
+knitr::kable(final_cluster, booktabs = TRUE,
+             caption = "(ref:cap-cluster)" )
+```
+
+As per table \@ref(tab:cluster), it can be observed that there are 18 groups with 17 different local optimums and one "No Convergence" group observed once around -2.3 and once around 2.47. It can be seen to be in line with the likelihood function graph \@ref(fig:likelifig2). In order to obtain the global optimum, which is close to 0, we should use the initial point interval between -0.8 and 0.5 approximately.
+
+
+# Population Growth Model - Optimization  {#sec:estimation}
+
+The counts of floor beetles is given by the logistic differential equation given as \@ref(eq:logdifeq). 
+
+\begin{align}
+  \frac{dN}{dt} =  rN \Big(1 - \frac{N}{K} \Big) 
+  (\#eq:logdifeq) \\ \\
+\end{align}
+
+where $N$ is the population size, $t$ is the time, $r$ is unknown growth parameter and $K$ is the population capacity. The solution of the differential equation is given by the following equation \@ref(eq:difeqsol).
+
+\begin{align}
+  N_t &= f(t) &= \frac{KN_{0}}{N_0 + (K - N_0)exp(-rt)} 
+  (\#eq:difeqsol) \\ \\
+\end{align}
+
+## Fitting the Population Model using Gauss Newton Approach
+
+"NLS" model from "Stats" package of R is utilized to apply Gauss Newton Approach. Initially the starting points have to be obtained. For the starting points, $K$ is initiated at 1500, and $r$ is obtained as the mean observed growth rate given $K$ is 1500. The formula for obtaining the initial parameter value for growth rate parameter is given in equation \@ref(eq:growth3). $r_{estimate}$ values can be obtained for each data and sample mean can be used as a naive estimate and therefore for initialization of r.
+
+\begin{align}
+N_t                      &=  \frac{KN_{0}}{N_0 + (K - N_0)exp(-rt)} \\  \\
+N_0 + (K - N_0)exp(-rt)  &= \frac{KN_0}{N_t} \\ \\
+(K - N_0)exp(-rt)        &= N_0 \frac{(k - N_t)}{N_t} \\ \\
+exp(-rt)                 &= \frac{N_0 (k - N_t)}{N_t (k - N_0)} \\ \\
+rt                       &= log\Big(\frac{N_t (k - N_0)}{N_0 (k - N_t)} \Big) \\ \\
+r_{estimate}             &= \frac{1}{t} log\Big(\frac{N_t (k - N_0)}{N_0 (k - N_t)} \Big)
+ (\#eq:growth3) \\ \\
+\end{align}
+
+```{r gaussnewton, echo = TRUE, message = FALSE, warning = FALSE}
+beetles <- data.frame(
+  days = c(0, 8, 28, 41, 63, 69, 97, 117, 135, 154),
+  beetles = c(2, 47, 192, 256, 768, 896, 1120, 896, 1184, 1024))
+
+# to obtain a starting estimate of r, assuming K = 1500
+K_0 = 1500
+r_0_vec <- log(beetles$beetles*(K_0 -2)/(K_0 - beetles$beetles)*2)/beetles$days
+r_0 = mean(r_0_vec[2:10])
+
+pop.model <- nls(beetles ~ K*2/(2 + (K - 2)*exp(-r*days)),
+            
+            start = list(K = K_0, r = r_0),
+            data = beetles,
+            trace = TRUE )
+```
+
+It can be observed that the population parameters $K$ and $r$ converge at 1049.4068372 and 0.1182685 respectively using the Gauss Newton approach in the NLS method. 
+\nextline
+
+In the second step, we try to plot the contour for the "Sum of Squared Errors" which we try to minimize, given a range of values of K and r. The contour plots are obtained as in Figure \@ref(fig:contour)
+
+(ref:cap-contour) Contour Plot of Sum of Squared Errors of Logistic Growth Model.
+
+```{r contour, echo = TRUE, fig.cap = "(ref:cap-contour)", fig.width = 10}
+## SSE Function
+
+SSE <- function(K, r) {
+  estimated_beetles <-  K*2/(2 + (K - 2)*exp(-r*beetles$days)) 
+  beetles_diff <- estimated_beetles - beetles$beetles
+  SSE <- t(beetles_diff)%*%beetles_diff 
+  return(SSE)
+}
+
+K_vec = seq(500, 1500, length.out = 200)
+r_vec = seq(0.1, 0.2, length.out = 200)
+SSE_matrix <- matrix(nrow = length(K_vec), ncol = length(r_vec))
+for (i in 1:length(K_vec)) {
+  for (j in 1:length(r_vec)) {
+    SSE_matrix[i,j] = SSE(K_vec[i],r_vec[j])
+  }
+}
+
+contour(x = K_vec, y = r_vec, z = SSE_matrix, xlab = "Population Capacity (K)", ylab = "growth parameter (r)", 
+        plot.title = title("Contour Plot of Sum of Squared Errors"))
+```
+
+From the contour, it could be seen that the minimum SSE is approximately 2*10^5 and is obtained within the range of K values belonging to (900,1200) and range of r values belonging to (0.1,0.15). By zooming in further, we could try to find the absolute minimum within this range that might have further lower SSE.
+
+
+## Using LogNormal Distribution for mean of population distribution
+
+If we assume that $log(N_t)$ is normally distributed with mean $log(f(t))$ and variance $\sigma^2$, then we can maximize log_likelihood as follows:
+    
+
+  
+
+```{r loglikelimax3, echo = TRUE, warning= FALSE, message= FALSE }
+# function to be minimized should be negative likelihood function
+beetles <- data.frame(
+  days = c(0, 8, 28, 41, 63, 69, 97, 117, 135, 154),
+  beetles = c(2, 47, 192, 256, 768, 896, 1120, 896, 1184, 1024))
+
+anti_log_likelihood3 <- function(theta) {
+  K = theta[1]
+  r = theta[2]
+  sigma = theta[3]
+  t <- beetles$days
+  N <- beetles$beetles
+  mu = log((2*K)/(2 + (K - 2)*exp(-r*t)))
+  anti_log_likelihood3 <- -sum(dnorm(log(N), mu, sigma, log =TRUE))
+return(anti_log_likelihood3)
+}
+
+theta.start = numeric(3)
+theta.start[1] <- 1500
+r_0_vec <- log(beetles$beetles*(K_0 -2)/(K_0 - beetles$beetles)*2)/beetles$days
+r_0 = mean(r_0_vec[2:10])
+theta.start[2] <- r_0
+theta.start[3] <- sqrt(var(log(beetles$beetles)))
+
+mle <- nlm(anti_log_likelihood3, theta.start, hessian = TRUE)
+mle$estimate
+
+hessian_matrix <- mle$hessian
+hessian_matrix
+
+estimates_variance <- solve(hessian_matrix)
+estimates_variance
+```
+
+As observed above, by using lognormal type distribution the M.L.E estimates for $K$, $r$ and $\sigma$ are obtained as 820.3811453, 0.1926394, 0.6440837. The values of K and r differ from what we have obtained earlier as a new parameter has been added and that is taken into consideration. We also noted during the contour that the minimum SSE are obtained for a wide range of values of K and r. The hessian matrix is obtained and solved to evaluate the variance of the estimates.  The variance of the estimators are 6.2E+04, 4E-03, adn 2E-02 respectively. The variance of the estimators seem reasonable with respect to the values that each parameters take. The big values of dispersion of K could be due to the fact that there are not much population in the sample and therefore it gives very small glimpse of what the population capacity (K) could be.
+
+
+# Acknowledgment {-}
+
+I would like to thank Professor Jun Yan for giving this project.
+
+# Reference {-}
+
+
+[pandoc]: http://pandoc.org/
+[pandocManual]: http://pandoc.org/MANUAL.html
+[repo]: https://github.com/wenjie2wang/datalab-templates
+[taskView]: https://cran.r-project.org/web/views/ReproducibleResearch.html
+[shiny.io]: https://www.shinyapps.io/
+[wenjie-stat.shinyapps]: https://wwenjie-stat.shinyapps.io/minisplines2
+
